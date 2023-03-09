@@ -632,7 +632,7 @@ class OpzioneMenu(pygame.sprite.Sprite):
         self.rect = self._text.get_rect()
         self.rect.x = self.position[0]+20
         self.rect.y = self.position[1]+25
-
+        self.image = self._text
 
     def update(self):
         self.game.screen.blit(OpzioneMenuNumeroMosse.PANNELLO_UNO_IMG, self.position)
@@ -640,6 +640,9 @@ class OpzioneMenu(pygame.sprite.Sprite):
             self.opzioni[self.value], 
             1, 
             BLACK)
+        self.rect = self._text.get_rect()
+        self.rect.x = self.position[0]+20
+        self.rect.y = self.position[1]+25        
         self.image = self._text
 
     def action(self):
