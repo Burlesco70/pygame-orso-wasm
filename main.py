@@ -667,13 +667,12 @@ class OpzioneMenuUscita(pygame.sprite.Sprite):
         self.game = game
         self.ESCI_GIOCO = get_img('buttonLong.png')
         self.ESCI_GIOCO_STR = get_img_alpha("Esci-dal-gioco.png")
-
-
-    def update(self):
-        self.game.screen.blit(self.ESCI_GIOCO, (100, 680))
         self.rect = self.ESCI_GIOCO_STR.get_rect()
         self.rect.x = 170
         self.rect.y = 690
+
+    def update(self):
+        self.game.screen.blit(self.ESCI_GIOCO, (100, 680))
         self.image = self.ESCI_GIOCO_STR
 
     def action(self):
