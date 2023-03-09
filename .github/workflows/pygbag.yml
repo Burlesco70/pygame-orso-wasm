@@ -9,6 +9,7 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+
     - name: Checkout
       run: |
             python3 -m pip install pygbag
@@ -17,5 +18,6 @@ jobs:
     - name : "Upload to GitHub pages"
       uses: JamesIves/github-pages-deploy-action@4.1.7
       with:
+        token: ${{ secrets.GH_TOKEN }}      
         branch: gh-pages
         folder: build/web
