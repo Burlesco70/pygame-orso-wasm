@@ -11,7 +11,6 @@ jobs:
     - uses: actions/checkout@v2
     - name: Checkout
       run: |
-            sudo apt-get install -y ffmpeg pngquant
             python3 -m pip install pygbag
             python3 -m pygbag --build $GITHUB_WORKSPACE
 
