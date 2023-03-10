@@ -908,12 +908,12 @@ class Player:
 
 
 # Main
-
 async def main():
     # Il gioco è richiamato da menu
+    opg = OrsoPyGame()
     await opg.menu()
     pygame.quit()
     sys.exit(0)
 
-opg = OrsoPyGame()
+
 asyncio.run(main())
