@@ -416,28 +416,28 @@ class OrsoPyGame():
 
     def _load_assets_game(self) -> None:
         '''Loading game assets'''
-        self.USCITA_IMG = get_img('back.png')
+        self.USCITA_IMG = get_img('img/back.png')
         self.USCITA_RECT = self.USCITA_IMG.get_rect()
         self.USCITA_RECT.center = (1355,675)
-        self.ORSO_VINCE = get_img_alpha("Lorso-vince.png")
-        self.CACCIATORI_VINCONO = get_img_alpha("Vincono-i-cacciatori.png")
+        self.ORSO_VINCE = get_img_alpha("img/Lorso-vince.png")
+        self.CACCIATORI_VINCONO = get_img_alpha("img/Vincono-i-cacciatori.png")
         # Scacchiera
-        self.BOARD_IMG = get_img('board.png')
+        self.BOARD_IMG = get_img('img/board.png')
 
     def _load_assets_menu(self) -> None:
         '''Loading menu assets'''
         # grafica titolo creata con https://textcraft.net/
-        self.ORSO_IDLE_IMG = get_img('little-bear-idle.png')
-        self.TRE_CACCIATORI_IMG = get_img('TreCacciatoriTurno.png')
+        self.ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
+        self.TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
 
-        self.TITOLO = get_img_alpha("Gioco-dellorso.png")
-        self.MENU_BACKGROUND = get_img("3d_board.png")
+        self.TITOLO = get_img_alpha("img/Gioco-dellorso.png")
+        self.MENU_BACKGROUND = get_img("img/3d_board.png")
 
     async def menu(self) -> None:
         '''
         Display main menu with PyGame
         '''
-        pygame.mixer.music.load('intro.ogg')
+        pygame.mixer.music.load('sfx/intro.ogg')
         pygame.mixer.music.play(-1)
 
         # Elementi di sfondo
@@ -516,7 +516,7 @@ class OrsoPyGame():
 
     async def game(self, player_mode: int, numero_mosse: int, inizia_cacciatore: bool):
         '''Game logic with PyGame'''
-        pygame.mixer.music.load('orso_music.ogg')
+        pygame.mixer.music.load('sfx/orso_music.ogg')
         pygame.mixer.music.play(-1)
         # Inizializza la scacchiera e il gioco
         self.gioco_orso = BearGame(player_mode, numero_mosse, inizia_cacciatore)
@@ -585,11 +585,11 @@ class OrsoPyGame():
                 self._msg = self.gioco_orso._winner
                 if self.gioco_orso.is_bear_winner():
                     #Non funziona con webasm
-                    #pygame.mixer.Channel(1).play(pygame.mixer.Sound('orso_ride.ogg'))
+                    #pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/orso_ride.ogg'))
                     self.screen.blit(self.ORSO_VINCE, (580,380))
                 else:
                     #Non funziona con webasm
-                    #pygame.mixer.Channel(1).play(pygame.mixer.Sound('cacciatori_ridono.ogg'))
+                    #pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/cacciatori_ridono.ogg'))
                     self.screen.blit(self.CACCIATORI_VINCONO, (480,380))
             # Aggiornamento screen
             pygame.display.update()
@@ -616,7 +616,7 @@ class OpzioneMenu(pygame.sprite.Sprite):
     - gioco orso
     - posizione del pannello di sfondo
     '''
-    PANNELLO_UNO_IMG = get_img('buttonLong.png') #panel
+    PANNELLO_UNO_IMG = get_img('img/buttonLong.png') #panel
     def __init__(self, opzioni: dict, default_value: object, game: OrsoPyGame, position: tuple):
         super().__init__()
         self.game = game
@@ -673,8 +673,8 @@ class OpzioneMenuUscita(pygame.sprite.Sprite):
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.ESCI_GIOCO = get_img('buttonLong.png')
-        self.ESCI_GIOCO_STR = get_img_alpha("Esci-dal-gioco.png")
+        self.ESCI_GIOCO = get_img('img/buttonLong.png')
+        self.ESCI_GIOCO_STR = get_img_alpha("img/Esci-dal-gioco.png")
         self.rect = self.ESCI_GIOCO_STR.get_rect()
         self.rect.x = 170
         self.rect.y = 690
@@ -693,8 +693,8 @@ class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.INIZIA = get_img('buttonLong.png')
-        self.INIZIA_STR = get_img_alpha("Inizia-a-giocare.png")
+        self.INIZIA = get_img('img/buttonLong.png')
+        self.INIZIA_STR = get_img_alpha("img/Inizia-a-giocare.png")
         self.rect = self.INIZIA_STR.get_rect()
         self.rect.x = 1140
         self.rect.y = 700
@@ -719,10 +719,10 @@ class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
 # Classi HUD di gioco
 class HudTurno(pygame.sprite.Sprite):
     '''HUD: pannello per il turno'''
-    ORSO_IDLE_IMG = get_img('little-bear-idle.png')
-    TRE_CACCIATORI_IMG = get_img('TreCacciatoriTurno.png')
+    ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
+    TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
     
-    PANNELLO_DUE_IMG = get_img('panel.png') #panel_due
+    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
  
     def __init__(self, game: OrsoPyGame):
         super().__init__()
@@ -749,7 +749,7 @@ class HudTurno(pygame.sprite.Sprite):
 
 class HudMosseOrso(pygame.sprite.Sprite):
     '''HUD: pannello per il contatore mosse orso'''
-    PANNELLO_DUE_IMG = get_img('panel.png') #panel_due
+    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
 
     def __init__(self, game: OrsoPyGame):
         super().__init__()
@@ -771,7 +771,7 @@ class HudMosseOrso(pygame.sprite.Sprite):
 
 class HudMessaggi(pygame.sprite.Sprite):
     '''HUD: pannello per i messaggi'''    
-    PANNELLO_UNO_IMG = get_img('buttonLong.png') #panel
+    PANNELLO_UNO_IMG = get_img('img/buttonLong.png') #panel
 
     def __init__(self, game: OrsoPyGame):
         super().__init__()
@@ -795,25 +795,25 @@ class CasellaGiocoOrso(pygame.sprite.Sprite):
     # Static resources
     TRASPARENTE = pygame.Surface((80,80), pygame.SRCALPHA)
 
-    ORSO_IMG = get_img('little-bear.png')
-    ORSO_IDLE_IMG = get_img('little-bear-idle.png')
-    ORSO_SEL_IMG = get_img('little-bear-sel.png')
+    ORSO_IMG = get_img('img/little-bear.png')
+    ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
+    ORSO_SEL_IMG = get_img('img/little-bear-sel.png')
 
-    CACCIATORE_UNO_IMG = get_img('little-hunter1.png')
-    CACCIATORE_UNO_IDLE_IMG = get_img('little-hunter1-idle.png')
-    CACCIATORE_UNO_SEL_IMG = get_img('little-hunter1-sel.png')
+    CACCIATORE_UNO_IMG = get_img('img/little-hunter1.png')
+    CACCIATORE_UNO_IDLE_IMG = get_img('img/little-hunter1-idle.png')
+    CACCIATORE_UNO_SEL_IMG = get_img('img/little-hunter1-sel.png')
 
-    CACCIATORE_DUE_IMG = get_img('little-hunter2.png')
-    CACCIATORE_DUE_IDLE_IMG = get_img('little-hunter2-idle.png')
-    CACCIATORE_DUE_SEL_IMG = get_img('little-hunter2-sel.png')
+    CACCIATORE_DUE_IMG = get_img('img/little-hunter2.png')
+    CACCIATORE_DUE_IDLE_IMG = get_img('img/little-hunter2-idle.png')
+    CACCIATORE_DUE_SEL_IMG = get_img('img/little-hunter2-sel.png')
 
-    CACCIATORE_TRE_IMG = get_img('little-hunter3.png')
-    CACCIATORE_TRE_IDLE_IMG = get_img('little-hunter3-idle.png')
-    CACCIATORE_TRE_SEL_IMG = get_img('little-hunter3-sel.png')
+    CACCIATORE_TRE_IMG = get_img('img/little-hunter3.png')
+    CACCIATORE_TRE_IDLE_IMG = get_img('img/little-hunter3-idle.png')
+    CACCIATORE_TRE_SEL_IMG = get_img('img/little-hunter3-sel.png')
         
     # Orme
-    ORMA_ORSO_IMG = get_img('impronta_orso.png')
-    ORMA_CACCIATORE_IMG = get_img('impronta_cacciatore.png')
+    ORMA_ORSO_IMG = get_img('img/impronta_orso.png')
+    ORMA_CACCIATORE_IMG = get_img('img/impronta_cacciatore.png')
 
     def __init__(self, position: int, game: OrsoPyGame):
         super().__init__()
