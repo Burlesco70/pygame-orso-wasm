@@ -6,9 +6,6 @@ Versione del gioco "finale" dopo il corso su PyGame
 ovvero con utilizzo di Sprites e gruppi di collisioni
 e maggiore orientamento OOP
 ----------------------------------------------------------------
-Sound Effect from
-https://pixabay.com/sound-effects/?utm_source=link-attribution&amp;utm_medium=referral&amp;utm_campaign=music&amp;utm_content=6185
-----------------------------------------------------------------
 10-2022 - Aggiunta AI Orso
 02-2023 - Aggiunta AI Cacciatori
 04-2023 - Impostazione a due manches dopo chiarimenti con i ricercatori del DocBi
@@ -328,20 +325,6 @@ class BearGameManche:
         self.move_bear(action[1])
         return "L'orso intelligente ha mosso!"
     
-    # def manage_ai_bear_selection(self) -> str:
-    #     '''
-    #     Implement stupid random logic
-    #     TODO Not used anymore...
-    #     '''
-    #     move_options = len(self.get_possible_moves(self._bear_position))
-    #     stupid_bear_new_pos = self.get_possible_moves(self._bear_position)[random.randint(0,move_options-1)]
-    #     # Bear makes the move
-    #     self._board[self._bear_position] = BOARD_EMPTY
-    #     self._board[stupid_bear_new_pos] = BOARD_BEAR
-    #     self._bear_position = stupid_bear_new_pos
-    #     self._is_hunter_turn = not(self._is_hunter_turn)
-    #     return "Seleziona uno dei cacciatori!"
-
     def manage_bear_selection(self,sel: int) -> str:
         '''Input selection from user; return user message to display'''
         if sel in self.get_possible_moves(self._bear_position):
