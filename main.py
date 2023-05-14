@@ -442,7 +442,10 @@ class OrsoPyGame:
         self.ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
         self.TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
         self.TITOLO = get_img_alpha("img/Gioco-dellorso.png")
-        self.MENU_BACKGROUND = get_img("img/3d_board.png")
+        self.L_ORSO = get_img_alpha("img/Lorso.png")
+        self.I_CACCIATORI = get_img_alpha("img/I-cacciatori.png")
+        # Utilizzo casuale delle immagini di sfondo
+        self.MENU_BACKGROUND = get_img(f"img/3d_board.png")
         self.PBG_LOGO = get_img("img/pbg-small-empty.png")
 
     async def menu(self) -> None:
@@ -457,7 +460,9 @@ class OrsoPyGame:
         self.screen.blit(self.MENU_BACKGROUND, (0, 0))
         self.screen.blit(self.PBG_LOGO, (0, 0))
         self.screen.blit(self.TITOLO, (500,20))
+        self.screen.blit(self.L_ORSO, (230, 350))
         self.screen.blit(self.ORSO_IDLE_IMG, (250, 420))
+        self.screen.blit(self.I_CACCIATORI, (1160, 350))
         self.screen.blit(self.TRE_CACCIATORI_IMG, (1200, 420))
         
         # Creo gruppo sprite per menu
