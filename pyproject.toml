@@ -1,17 +1,15 @@
 [tool.poetry]
 name = "GiocoDellOrso"
-version = "1.1"
-description = """
-Gioco dell'orso
-Bear (and Hunter)'s Game is an ancient board game played in Cervo Valley, in the Italian Alps
-More informations about its discovery here: https://vallecervobiella.wordpress.com/il-gioco-dellorso/ (in Italian)
-"""
+version = "1.2"
+description = "Gioco dell'orso – Bear (and Hunter)'s Game is an ancient board game played in Cervo Valley, in the Italian Alps. More information: https://vallecervobiella.wordpress.com/il-gioco-dellorso/"
+
 authors = ["Python Biella Group <pythonbiellagroup@gmail.com>"]
 license = "MIT"
 
 [tool.poetry.dependencies]
-python = "^3.8"
-pygame = "^2"
+python = "^3.11"
+pygame-ce = "^2"
+pygbag = "^0.9.2"
 
 [tool.poetry.dev-dependencies]
 

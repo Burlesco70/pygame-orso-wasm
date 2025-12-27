@@ -12,15 +12,18 @@ e maggiore orientamento OOP
 '''
 
 from __future__ import annotations
+from typing import List, Tuple
 import asyncio
-from json.encoder import INFINITY
 import os
 import pygame
-import time
 import sys
 import functools
 import random
 import pickle
+
+IS_WEB = sys.platform == "emscripten"
+
+INFINITY = float('inf')
 
 # Palette - RGB colors
 BLACK = (0, 0, 0)
@@ -91,11 +94,7 @@ class BearGameManche:
         '''
         Load policies for AI
         '''
-        # Temporary folder for PyInstaller
-        try:
-            base_path = sys._MEIPASS
-        except AttributeError:
-            base_path = os.path.abspath(".")
+        base_path = "."
         # Start settings
         self.reset(against_computer, classic_initial_position)
         self.first_manche_as_bear = first_manche_as_bear
@@ -212,7 +211,7 @@ class BearGameManche:
                 self._hunter_starting_pos = -1
                 return "Posizione non valida!"
     
-    def manage_ai_hunter_selection(self) -> str:
+    async def manage_ai_hunter_selection(self) -> str:
         '''
         Use precalculated policy to select the best move for the hunter
         '''
@@ -240,10 +239,10 @@ class BearGameManche:
             self._hunter_ai_final = -1
             self._is_hunter_turn = not self._is_hunter_turn
             # Attesa simulazione "pensiero"
-            time.sleep(1)
+            await asyncio.sleep(1)
             return "Orso, scegli la tua mossa!"
 
-    def get_bear_actions(self) -> list[(int, int)]:
+    def get_bear_actions(self) -> List[Tuple[int, int]]:
         '''
         Return a list of tuples with starting pos and next possible move
         '''
@@ -305,7 +304,7 @@ class BearGameManche:
             self._board[target_position] = start_symbol
         self._last_move = None
 
-    def move_player(self, start_pos, end_pos) -> str:
+    def move_player(self, start_pos, end_pos) -> None:
         '''
         Move player to start position to end position
         '''
@@ -314,12 +313,12 @@ class BearGameManche:
         else:
             return self.move_bear(end_pos)
 
-    def manage_ai_smart_bear_selection(self) -> str:
+    async def manage_ai_smart_bear_selection(self) -> str:
         '''
         Implement AI logic
         '''
         # Attesa simulazione "pensiero"
-        time.sleep(1)
+        await asyncio.sleep(1)
         bear_actions = self.get_bear_actions()
         action = self._bear_player.get_action(bear_actions, self)
         self.move_bear(action[1])
@@ -390,8 +389,12 @@ class OrsoPyGame:
     PyGame specific implementation for the game
     '''
     # Create the window
-    FINESTRA_X=1536
-    FINESTRA_Y=864
+    if IS_WEB: # WebASM
+        FINESTRA_X=1280
+        FINESTRA_Y=720
+    else:
+        FINESTRA_X=1536
+        FINESTRA_Y=864
     DIM_CASELLA = 80
 
     def __init__(self):
@@ -402,9 +405,14 @@ class OrsoPyGame:
         self.winner = None
         # Initialize pygame
         pygame.init()
-        # flags to manage full screen and rescaling, working for Pygame > 2.0
-        display_flags = pygame.SCALED | pygame.FULLSCREEN
-        self.screen = pygame.display.set_mode((OrsoPyGame.FINESTRA_X, OrsoPyGame.FINESTRA_Y), display_flags)
+        if IS_WEB:
+            # Non può essere SCALED per webasm
+            self.screen = pygame.display.set_mode((OrsoPyGame.FINESTRA_X, OrsoPyGame.FINESTRA_Y))
+        else:
+            # flags to manage full screen and rescaling, working for Pygame > 2.0
+            display_flags = pygame.SCALED | pygame.FULLSCREEN
+            self.screen = pygame.display.set_mode((OrsoPyGame.FINESTRA_X, OrsoPyGame.FINESTRA_Y), display_flags)
+      
         pygame.display.set_caption("Gioco dell'orso")
         # set game clock
         self.clock = pygame.time.Clock()
@@ -505,7 +513,7 @@ class OrsoPyGame:
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
                     self._running = False
-                    self.quit()
+                    await self.quit()
                 elif event.type == pygame.MOUSEBUTTONDOWN:                
                     self._pos_call = pygame.mouse.get_pos()
                     for m_item in self._menu_items:
@@ -518,9 +526,9 @@ class OrsoPyGame:
             pygame.display.update()
             await asyncio.sleep(0)
 
-    def quit(self):
+    async def quit(self):
         '''Exit from game'''
-        pygame.time.delay(500)
+        await asyncio.sleep(0.5)
         if MUSIC:
             pygame.mixer.music.fadeout(500)
             pygame.mixer.music.stop()
@@ -529,7 +537,7 @@ class OrsoPyGame:
 
     async def _menu_call(self):
         '''Menu call'''
-        pygame.time.delay(500)
+        await asyncio.sleep(0.5)
         if MUSIC:
             pygame.mixer.music.fadeout(500)
         await self.menu()
@@ -583,11 +591,11 @@ class OrsoPyGame:
             if ((self.una_manche.against_computer) and 
                 (not self.una_manche.is_hunter_turn()) and 
                 (self._computer == "BEAR")):
-                self._msg = self.una_manche.manage_ai_smart_bear_selection()
+                self._msg = await self.una_manche.manage_ai_smart_bear_selection()
             if ((self.una_manche.against_computer) and 
                 (self.una_manche.is_hunter_turn()) and 
                 (self._computer == "HUNTER"))                :
-                self._msg = self.una_manche.manage_ai_hunter_selection()                          
+                self._msg = await self.una_manche.manage_ai_hunter_selection()                          
             pygame.display.update()
             await asyncio.sleep(0)
             # Check eventi
@@ -639,14 +647,20 @@ class OrsoPyGame:
                 self.LOBSTER_25 = pygame.font.Font('LobsterTwo-Regular.otf',25)
                 text = ""
                 if self.una_manche.is_bear_winner():
-                    #Non funziona con webasm
-                    if MUSIC:
-                        pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/orso_ride.ogg'))
+                    try:
+                        #Non funziona con webasm
+                        if MUSIC:
+                            pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/orso_ride.ogg'))
+                    except:
+                        pass
                     text = self.LOBSTER_25.render(f"   L'orso raggiunge {self.una_manche.get_max_bear_moves()} mosse e scappa!", 1, BLACK)
                 else:
-                    #Non funziona con webasm
-                    if MUSIC:
-                        pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/success.ogg')) 
+                    try:
+                        #Non funziona con webasm
+                        if MUSIC:
+                            pygame.mixer.Channel(1).play(pygame.mixer.Sound('sfx/success.ogg')) 
+                    except:
+                        pass
                     text = self.LOBSTER_25.render(f"  I cacciatori lasciano all'orso {self.una_manche.get_bear_moves()} mosse", 1, BLACK)
                 self.screen.blit(text, (590,400))
                 pygame.display.update()
@@ -849,9 +863,9 @@ class OpzioneMenuUscita(pygame.sprite.Sprite):
         self.game.screen.blit(self.ESCI_GIOCO, (100, 680))
         self.image = self._esci_str
 
-    def action(self):
+    async def action(self):
         self.game._running = False
-        self.game.quit()
+        await self.game.quit()
     
 
 class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
@@ -873,7 +887,7 @@ class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
 
     async def action(self):
         self.game._running = False
-        pygame.time.delay(800)
+        await asyncio.sleep(0.8)
         # fade out menu music
         if MUSIC:
             pygame.mixer.music.fadeout(800)
@@ -1172,6 +1186,6 @@ async def main():
     '''
     opg = OrsoPyGame()
     await opg.menu()
-    opg.quit()
+    await opg.quit()
 
 asyncio.run(main())
