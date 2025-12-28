@@ -7,3 +7,5 @@ note.txt
 /build
 /dist
 /doc
+poetry.lock
+__pycache__/

@@ -9,6 +9,7 @@ e maggiore orientamento OOP
 10-2022 - Aggiunta AI Orso
 02-2023 - Aggiunta AI Cacciatori
 04-2023 - Impostazione a due manches dopo chiarimenti con i ricercatori del DocBi
+12-2025 - Scalato a 1280x720 per supporto WebASM e dispositivi con schermi diversi
 '''
 
 from __future__ import annotations
@@ -21,90 +22,111 @@ import functools
 import random
 import pickle
 
+# Rileva se l'esecuzione avviene in ambiente WebASM (browser)
 IS_WEB = sys.platform == "emscripten"
 
 INFINITY = float('inf')
 
-# Palette - RGB colors
+# ========== CONFIGURAZIONE COLORI ==========
 BLACK = (0, 0, 0)
 RED = (255, 0, 0)
 
-# Symbols for the board of game
-BOARD_HUNTER_1 = '1'
-BOARD_HUNTER_2 = '8'
-BOARD_HUNTER_3 = '9'
-BOARD_BEAR = '2'
-BOARD_EMPTY = '_'
-# Symbols for the board of policy
-# Unlink dependency logic between board game and board policy
+# ========== SIMBOLI PER LA SCACCHIERA ==========
+# Simboli usati nella rappresentazione logica della board
+BOARD_HUNTER_1 = '1'  # Primo cacciatore
+BOARD_HUNTER_2 = '8'  # Secondo cacciatore
+BOARD_HUNTER_3 = '9'  # Terzo cacciatore
+BOARD_BEAR = '2'      # Orso
+BOARD_EMPTY = '_'     # Casella vuota
+
+# Simbolo normalizzato per le policy AI (tutti i cacciatori sono uguali per l'AI)
 BOARD_HUNTER_POLICY = '1'
+
+# Flag per abilitare/disabilitare la musica
 MUSIC = True
 
 class GamePlayer:
     '''
-    Giocatore delle due manches
+    Rappresenta un giocatore nelle due manches del gioco.
+    Tiene traccia del nome, tipo (umano/computer), ruolo (cacciatore/orso)
+    e numero di mosse fatte come orso.
     '''
     def __init__(self, name, is_human, is_hunter) -> None:
-        self.name = name
-        self.is_human = is_human
-        self.bear_moves = 0
-        self.is_hunter = is_hunter
+        self.name = name              # Nome visualizzato (es. "Tu", "Computer")
+        self.is_human = is_human      # True se giocatore umano, False se AI
+        self.bear_moves = 0           # Mosse completate quando gioca come orso
+        self.is_hunter = is_hunter    # True se in questo turno è cacciatore
+
 
 class BearGameManche:
     '''
-    PyGame-independent manche-game class
-    Class for logical board and game model
-    21 positions:
-    _ means empty;
-    1-8-9 means hunters; 
-    2 means bear;
+    Gestisce la logica di una singola manche del gioco.
+    Questa classe è indipendente da PyGame e contiene solo la logica del gioco.
+    
+    La scacchiera ha 21 posizioni numerate da 0 a 20:
+    - '_' indica una casella vuota
+    - '1', '8', '9' indicano i tre cacciatori
+    - '2' indica l'orso
     '''
-    # Settings
-    BOARD_POSITIONS = 21
-    # Eventually change for testing
-    MAX_BEAR_MOVES = 40
-    HUNTER_STARTS = False
-    # Adjacent positions in the board, list index is the board  position
-    ADJACENT_POSITIONS = [[1,2,3], #0
-                          [0,3,4],
-                          [0,3,6], #2
-                          [0,1,2,5],
-                          [1,7,8], #4
-                          [3,9,10,11],
-                          [2,12,13], #6
-                          [4,8,14],
-                          [7,4,14,9], #8
-                          [8, 10,5,15],
-                          [5,9,11,15],#10
-                          [5,10,15,12],
-                          [11,6,16,13],#12
-                          [6,12,16],
-                          [7,8,18],#14
-                          [9,10,11,17],
-                          [12,13,19], #16
-                          [15,18,19,20],
-                          [14,17,20], #18
-                          [16, 17, 20],
-                          [18, 17, 19]]
+    
+    # ========== CONFIGURAZIONE GIOCO ==========
+    BOARD_POSITIONS = 21           # Numero totale di posizioni sulla scacchiera
+    MAX_BEAR_MOVES = 40            # Mosse massime per la vittoria dell'orso
+    HUNTER_STARTS = False          # Se True, iniziano i cacciatori
+    
+    # Definisce quali posizioni sono adiacenti a ciascuna casella
+    # L'indice della lista corrisponde alla posizione sulla board
+    ADJACENT_POSITIONS = [
+        [1,2,3],        # Posizione 0: collegata a 1,2,3
+        [0,3,4],        # Posizione 1: collegata a 0,3,4
+        [0,3,6],        # Posizione 2: collegata a 0,3,6
+        [0,1,2,5],      # Posizione 3: nodo centrale, 4 collegamenti
+        [1,7,8],        # Posizione 4
+        [3,9,10,11],    # Posizione 5: nodo importante con 4 collegamenti
+        [2,12,13],      # Posizione 6
+        [4,8,14],       # Posizione 7
+        [7,4,14,9],     # Posizione 8: 4 collegamenti
+        [8,10,5,15],    # Posizione 9: 4 collegamenti
+        [5,9,11,15],    # Posizione 10: 4 collegamenti
+        [5,10,15,12],   # Posizione 11: 4 collegamenti
+        [11,6,16,13],   # Posizione 12: 4 collegamenti
+        [6,12,16],      # Posizione 13
+        [7,8,18],       # Posizione 14
+        [9,10,11,17],   # Posizione 15: nodo importante con 4 collegamenti
+        [12,13,19],     # Posizione 16
+        [15,18,19,20],  # Posizione 17: nodo importante con 4 collegamenti
+        [14,17,20],     # Posizione 18
+        [16,17,20],     # Posizione 19
+        [18,17,19]      # Posizione 20: posizione iniziale classica dell'orso
+    ]
 
     def __init__(self, 
-                 first_manche_as_bear:bool,
+                 first_manche_as_bear: bool,
                  against_computer: bool, 
                  classic_initial_position: bool):
         '''
-        Load policies for AI
+        Inizializza una manche e carica le policy per l'AI.
+        
+        Args:
+            first_manche_as_bear: True se il giocatore umano inizia come orso
+            against_computer: True se si gioca contro l'AI
+            classic_initial_position: True per posizione iniziale classica (cacciatori in alto, orso in basso)
         '''
         base_path = "."
-        # Start settings
+        
+        # Imposta la configurazione iniziale della board
         self.reset(against_computer, classic_initial_position)
         self.first_manche_as_bear = first_manche_as_bear
-        # Reinforcement learning loading for Bear AI
+        
+        # ========== CARICAMENTO AI ORSO ==========
+        # Carica la policy appresa tramite Reinforcement Learning
         self._bear_player = Player("orso")
         self._bear_player.load_policy(
             os.path.join(base_path, "bear.policy")
         )
 
-        # Deterministic distance based state-value function for Hunter AI
+        # ========== CARICAMENTO AI CACCIATORE ==========
+        # Carica la policy deterministica basata sulla distanza
         self._hunter_player = Player("cacciatore")
         self._hunter_player.load_policy(
             os.path.join(base_path, "hunter.policy")
@@ -112,139 +134,202 @@ class BearGameManche:
         
     def reset(self, against_computer: bool, classic_initial_position: bool) -> None:
         '''
-        Initial positions and settings
+        Reimposta la board e le variabili di gioco per iniziare una nuova manche.
+        
+        Ci sono due configurazioni iniziali possibili:
+        1. Classica: cacciatori in posizioni 0,1,2 - orso in posizione 20
+        2. Centrale (Iacazio): configurazione più bilanciata per partite veloci
         '''
-        # Start and reset settings
         if classic_initial_position:
-            self._board = [BOARD_HUNTER_1, BOARD_HUNTER_2, BOARD_HUNTER_3, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY,
-                        BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY,
-                        BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_BEAR]
+            # Configurazione classica: cacciatori raggruppati in alto
+            self._board = [
+                BOARD_HUNTER_1, BOARD_HUNTER_2, BOARD_HUNTER_3,  # Pos 0,1,2: cacciatori
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY,
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY,
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_BEAR  # Pos 20: orso
+            ]
             self._bear_position = 20            
         else:
-            # Quick start - Iacazio's start
-            self._board = [BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_HUNTER_1, BOARD_EMPTY,
-                        BOARD_EMPTY, BOARD_EMPTY, BOARD_HUNTER_2, BOARD_BEAR, BOARD_HUNTER_3, BOARD_EMPTY, BOARD_EMPTY,
-                        BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY]
+            # Configurazione centrale "Iacazio" per partite più veloci
+            self._board = [
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_HUNTER_1,  # Pos 5
+                BOARD_EMPTY,
+                BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_HUNTER_2,  # Pos 9
+                BOARD_BEAR,      # Pos 10: orso al centro
+                BOARD_HUNTER_3,  # Pos 11
+                BOARD_EMPTY, BOARD_EMPTY,
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY, 
+                BOARD_EMPTY, BOARD_EMPTY, BOARD_EMPTY
+            ]
             self._bear_position = 10            
         
-        self._bear_moves = 0
-        self._hunter_starting_pos = -1
-        # _hunter_ai_final usato solo per hunter AI
-        self._hunter_ai_final = -1
-        # From external configuration
-        self._is_hunter_turn = self.HUNTER_STARTS
+        # Inizializza le variabili di stato
+        self._bear_moves = 0                    # Contatore mosse orso
+        self._hunter_starting_pos = -1          # Posizione cacciatore selezionato (-1 = nessuno)
+        self._hunter_ai_final = -1              # Destinazione AI cacciatore
+        self._is_hunter_turn = self.HUNTER_STARTS  # Di chi è il turno
         self.against_computer = against_computer
-        self._winner = None
-        self._last_move = None
+        self._winner = None                     # Messaggio del vincitore
+        self._last_move = None                  # Ultima mossa effettuata (per undo)
 
-
+    # ========== METODI GETTER ==========
+    
     def get_bear_moves(self) -> int:
-        '''
-        Counter of bear moves
-        '''
+        '''Restituisce il numero di mosse completate dall'orso.'''
         return self._bear_moves
 
-
     def get_max_bear_moves(self) -> int:
-        '''
-        Max bear moves
-        '''
+        '''Restituisce il numero massimo di mosse per la vittoria dell'orso.'''
         return self.MAX_BEAR_MOVES
 
-    def get_board_position(self, position:int) -> str:
+    def get_board_position(self, position: int) -> str:
         '''
-        Return the pown of the input position
+        Restituisce il simbolo ('1','8','9','2','_') presente nella posizione specificata.
+        
+        Args:
+            position: Indice della posizione (0-20)
+        Returns:
+            Stringa con il simbolo della pedina o '_' per vuoto
         '''
         return self._board[position]
 
     def get_hunter_starting_pos(self) -> int:
         '''
-        Return the hunter starting position
+        Restituisce la posizione del cacciatore attualmente selezionato.
+        Returns -1 se nessun cacciatore è selezionato.
         '''
         return self._hunter_starting_pos
     
+    # ========== METODI DI CONTROLLO VITTORIA ==========
+    
     def is_bear_winner(self) -> bool:
-        '''Returns the winner in a string type for display purposes'''
+        '''
+        Verifica se l'orso ha vinto.
+        L'orso vince se raggiunge MAX_BEAR_MOVES mosse.
+        '''
+        # L'orso perde se non ha mosse disponibili
         if not(self.get_possible_moves(self._bear_position)):
             return False
+        # L'orso vince se raggiunge il numero massimo di mosse
         if (self._bear_moves >= self.MAX_BEAR_MOVES):
             return True
 
     def game_over(self) -> bool:
-        '''Check for game over'''
+        '''
+        Verifica se la manche è terminata e imposta il messaggio del vincitore.
+        
+        Returns:
+            True se la partita è finita, False altrimenti
+        '''
+        # Cacciatori vincono se l'orso non ha mosse disponibili
         if not(self.get_possible_moves(self._bear_position)):
             self._winner = f"I cacciatori vincono; l'orso ha fatto {self.get_bear_moves()} mosse"
             return True
+        # Orso vince se raggiunge il numero massimo di mosse
         elif (self._bear_moves >= self.MAX_BEAR_MOVES):
             self._winner = f"L'orso è scappato; ha fatto {self.get_bear_moves()} mosse"
             return True
         else:
             return False
 
-    def is_hunter(self, selection:str) -> bool:
-        '''Check if selection is an hunter'''
+    # ========== METODI DI UTILITÀ ==========
+    
+    def is_hunter(self, selection: str) -> bool:
+        '''Verifica se il simbolo rappresenta un cacciatore.'''
         return selection in [BOARD_HUNTER_1, BOARD_HUNTER_2, BOARD_HUNTER_3]
 
     def is_hunter_turn(self) -> bool:
-        '''Check if is it the hunter turn'''
+        '''Verifica se è il turno dei cacciatori.'''
         return self._is_hunter_turn
 
-    def manage_hunter_selection(self, sel:int) -> str:
-        '''Input selection from user; return user message to display'''
-        selected_hunter = ''
-        # Pick up pawn (starting pos -1)
+    # ========== GESTIONE MOSSE CACCIATORE (UMANO) ==========
+    
+    def manage_hunter_selection(self, sel: int) -> str:
+        '''
+        Gestisce la selezione e il movimento dei cacciatori da parte del giocatore umano.
+        Il processo è in due fasi: prima si seleziona un cacciatore, poi la destinazione.
+        
+        Args:
+            sel: Posizione selezionata dal giocatore
+        Returns:
+            Messaggio da visualizzare all'utente
+        '''
+        # FASE 1: Selezione del cacciatore
         if self._hunter_starting_pos == -1:
-            if (not(self.is_hunter(self._board[sel]))):
+            if not(self.is_hunter(self._board[sel])):
                 return "Seleziona un cacciatore!"
             else:
+                # Cacciatore selezionato, aspetta la destinazione
                 self._hunter_starting_pos = sel
                 return "Cacciatore, fa' la tua mossa!"
-        else: # Finding final position for hunter
+        
+        # FASE 2: Selezione della destinazione
+        else:
             if sel in self.get_possible_moves(self._hunter_starting_pos):
+                # Mossa valida: sposta il cacciatore
                 selected_hunter = self._board[self._hunter_starting_pos]
                 self._board[self._hunter_starting_pos] = BOARD_EMPTY
                 self._board[sel] = selected_hunter
-                self._hunter_starting_pos = -1
-                self._is_hunter_turn = not(self._is_hunter_turn)
+                self._hunter_starting_pos = -1  # Reset selezione
+                self._is_hunter_turn = not(self._is_hunter_turn)  # Cambia turno
                 return "Orso, scegli la tua mossa!"
-            else: # Go back to picking stage
+            else:
+                # Mossa non valida: torna alla fase di selezione
                 self._hunter_starting_pos = -1
                 return "Posizione non valida!"
     
+    # ========== GESTIONE MOSSE CACCIATORE (AI) ==========
+    
     async def manage_ai_hunter_selection(self) -> str:
         '''
-        Use precalculated policy to select the best move for the hunter
+        Gestisce la mossa dell'AI cacciatore usando la policy precalcolata.
+        Simula il comportamento umano in due fasi: selezione e movimento.
         '''
-        # Simulation of human behavior: first select, than move
+        # FASE 1: Selezione del cacciatore da muovere
         if (self._hunter_starting_pos == -1):
+            # Trova tutte le posizioni dei cacciatori
             hunter_positions = []
             for x in range(self.BOARD_POSITIONS):
-                if self._board[x] == BOARD_HUNTER_1 or self._board[x] == BOARD_HUNTER_2 or self._board[x] == BOARD_HUNTER_3:
+                if self._board[x] in [BOARD_HUNTER_1, BOARD_HUNTER_2, BOARD_HUNTER_3]:
                     hunter_positions.append(x)
 
+            # Genera tutte le possibili azioni (cacciatore, destinazione)
             hunter_actions = []
             for x in hunter_positions:
                 moves = self.get_possible_moves(x)
                 for move in moves:
                     hunter_actions.append((x, move))                    
 
+            # Usa la policy AI per scegliere la migliore azione
             action = self._hunter_player.get_action(hunter_actions, self)
-            self._hunter_starting_pos = action[0]
-            self._hunter_ai_final = action[1]
+            self._hunter_starting_pos = action[0]  # Cacciatore scelto
+            self._hunter_ai_final = action[1]      # Destinazione scelta
             return "Cacciatore selezionato"
+        
+        # FASE 2: Esecuzione della mossa
         else:
             self._board[self._hunter_ai_final] = self._board[self._hunter_starting_pos]            
             self._board[self._hunter_starting_pos] = BOARD_EMPTY
             self._hunter_starting_pos = -1
             self._hunter_ai_final = -1
             self._is_hunter_turn = not self._is_hunter_turn
-            # Attesa simulazione "pensiero"
+            # Pausa per simulare il "pensiero" dell'AI
             await asyncio.sleep(1)
             return "Orso, scegli la tua mossa!"
 
+    # ========== GESTIONE MOSSE ORSO ==========
+    
     def get_bear_actions(self) -> List[Tuple[int, int]]:
         '''
-        Return a list of tuples with starting pos and next possible move
+        Restituisce tutte le azioni possibili per l'orso.
+        
+        Returns:
+            Lista di tuple (posizione_corrente, destinazione_possibile)
         '''
         actions = []
         for adj in BearGameManche.ADJACENT_POSITIONS[self._bear_position]:
@@ -254,15 +339,21 @@ class BearGameManche:
 
     def move_bear(self, new_position: int) -> None:
         '''
-        Used by move_player for get_actions
-        Move bear to a random position
+        Muove l'orso in una nuova posizione.
+        Questo metodo è usato sia dall'AI che dal metodo move_player.
+        
+        Args:
+            new_position: Posizione di destinazione
+        Raises:
+            ValueError: Se la mossa non è valida
         '''
         self._last_move = (self._bear_position, new_position)
+        
         if new_position in self.get_possible_moves(self._bear_position):
             self._board[self._bear_position] = BOARD_EMPTY
             self._board[new_position] = BOARD_BEAR
             self._bear_position = new_position
-            self._bear_moves += 1
+            self._bear_moves += 1  # Incrementa il contatore
             self._is_hunter_turn = not self._is_hunter_turn
         else:
             print(self._last_move)
@@ -270,7 +361,8 @@ class BearGameManche:
 
     def move_hunter(self, start_position: int, end_position: int) -> None:
         '''
-        Used by move_player for get_actions
+        Muove un cacciatore da una posizione a un'altra.
+        Usato dal metodo move_player per l'AI.
         '''
         self._last_move = (start_position, end_position)
         start_symbol = self._board[start_position]
@@ -278,35 +370,11 @@ class BearGameManche:
         self._board[end_position] = start_symbol
         self._is_hunter_turn = not self._is_hunter_turn
 
-    def get_hash(self) -> str:
-        '''
-        Return a hash of the board
-        '''
-        board = self._board.copy()
-        # normalize the hunter ids for the Reinforcement model
-        # unlink dependency logic between board game and board policy
-        for i in range(len(board)):
-            if board[i] == BOARD_HUNTER_3 or board[i] == BOARD_HUNTER_2 or board[i] == BOARD_HUNTER_1:
-                board[i] = BOARD_HUNTER_POLICY
-        return ''.join(board)
-
-    def undo_move(self) -> None:
-        '''Undo the move'''
-        self._is_hunter_turn = not self._is_hunter_turn
-        target_position, starting_position = self._last_move  # contrario!
-        start_symbol = self._board[starting_position] # prendi il simbolo alla vecchia posizione
-        self._board[starting_position] = BOARD_EMPTY
-        if self._is_hunter_turn:
-            self._board[target_position] = start_symbol
-        else:
-            self._bear_moves -= 1
-            self._bear_position = target_position
-            self._board[target_position] = start_symbol
-        self._last_move = None
-
     def move_player(self, start_pos, end_pos) -> None:
         '''
-        Move player to start position to end position
+        Interfaccia generica per muovere un giocatore.
+        Chiama move_hunter o move_bear in base al turno.
+        Usato dall'AI per simulare mosse durante la ricerca.
         '''
         if self._is_hunter_turn:
             return self.move_hunter(start_pos, end_pos)
@@ -315,19 +383,33 @@ class BearGameManche:
 
     async def manage_ai_smart_bear_selection(self) -> str:
         '''
-        Implement AI logic
+        Gestisce la mossa dell'AI orso usando la policy di Reinforcement Learning.
         '''
-        # Attesa simulazione "pensiero"
+        # Pausa per simulare il "pensiero"
         await asyncio.sleep(1)
+        
+        # Ottiene tutte le azioni possibili
         bear_actions = self.get_bear_actions()
+        
+        # Usa la policy AI per scegliere la migliore
         action = self._bear_player.get_action(bear_actions, self)
+        
+        # Esegue la mossa
         self.move_bear(action[1])
+        
         return "L'orso intelligente ha mosso!"
     
-    def manage_bear_selection(self,sel: int) -> str:
-        '''Input selection from user; return user message to display'''
+    def manage_bear_selection(self, sel: int) -> str:
+        '''
+        Gestisce la mossa dell'orso controllato da un giocatore umano.
+        
+        Args:
+            sel: Posizione selezionata dal giocatore
+        Returns:
+            Messaggio da visualizzare
+        '''
         if sel in self.get_possible_moves(self._bear_position):
-            # Bear makes the move
+            # Mossa valida: sposta l'orso
             self._board[self._bear_position] = BOARD_EMPTY
             self._board[sel] = BOARD_BEAR
             self._bear_moves += 1
@@ -337,13 +419,20 @@ class BearGameManche:
         else:
             return "Posizione non valida..."
     
-    def is_footprint_and_type(self, sel:int) -> tuple[bool, str]:
+    # ========== METODI PER LA VISUALIZZAZIONE ==========
+    
+    def is_footprint_and_type(self, sel: int) -> tuple[bool, str]:
         '''
-        Return a tuple:
-        - if is a footprint
-        - footprint type (HUNTER|BEAR), None if is not a footprint
+        Verifica se una posizione è una destinazione valida (orma).
+        Le orme vengono visualizzate per indicare dove può muoversi il giocatore.
+        
+        Args:
+            sel: Posizione da controllare
+        Returns:
+            Tupla (è_orma, tipo_orma) dove tipo_orma è "HUNTER" o "BEAR" o None
         '''
         if self._is_hunter_turn:
+            # Se è il turno dei cacciatori e uno è selezionato
             if self._hunter_starting_pos == -1:
                 return (False, None)
             else:
@@ -352,6 +441,7 @@ class BearGameManche:
                 else:
                     return (False, None)
         else:
+            # Se è il turno dell'orso
             if sel in self.get_possible_moves(self._bear_position):
                 return (True, "BEAR")
             else:
@@ -359,42 +449,105 @@ class BearGameManche:
 
     def get_possible_moves(self, position: int) -> list[int]:
         '''
-        Returns the list with possible free positions
+        Restituisce tutte le posizioni libere adiacenti a una posizione data.
+        
+        Args:
+            position: Posizione di partenza
+        Returns:
+            Lista di posizioni libere raggiungibili
         '''
         moves = []
-        #Check free positions
+        # Controlla tutte le posizioni adiacenti
         for x in BearGameManche.ADJACENT_POSITIONS[position]:
             if self._board[x] == BOARD_EMPTY:
                 moves.append(x)
         return moves
 
+    # ========== METODI PER L'AI ==========
+    
+    def get_hash(self) -> str:
+        '''
+        Genera un hash univoco dello stato della board per l'AI.
+        Normalizza i cacciatori (1,8,9 -> tutti '1') perché per l'AI
+        sono indistinguibili.
+        
+        Returns:
+            Stringa che rappresenta lo stato della board
+        '''
+        board = self._board.copy()
+        
+        # Normalizza gli ID dei cacciatori per il modello di RL
+        for i in range(len(board)):
+            if board[i] in [BOARD_HUNTER_3, BOARD_HUNTER_2, BOARD_HUNTER_1]:
+                board[i] = BOARD_HUNTER_POLICY
+        
+        return ''.join(board)
+
+    def undo_move(self) -> None:
+        '''
+        Annulla l'ultima mossa effettuata.
+        Usato dall'AI per esplorare diverse possibilità durante la ricerca.
+        '''
+        self._is_hunter_turn = not self._is_hunter_turn
+        target_position, starting_position = self._last_move  # Invertiti!
+        start_symbol = self._board[starting_position]
+        self._board[starting_position] = BOARD_EMPTY
+        
+        if self._is_hunter_turn:
+            # Era una mossa dell'orso, ripristina il cacciatore
+            self._board[target_position] = start_symbol
+        else:
+            # Era una mossa dei cacciatori, ripristina l'orso
+            self._bear_moves -= 1
+            self._bear_position = target_position
+            self._board[target_position] = start_symbol
+        
+        self._last_move = None
+
+
+# ========== FUNZIONI DI UTILITÀ PER ASSET ==========
+
 @functools.lru_cache()
 def get_img(path):
     '''
-    To optimize assets loading
-    "lru_cache" decorator saves recent images into memory for fast retrieval
+    Carica un'immagine con cache LRU per ottimizzare le prestazioni.
+    Il decorator lru_cache salva le immagini in memoria per recuperi rapidi.
     '''
     return pygame.image.load(path)
 
 @functools.lru_cache()
 def get_img_alpha(path):
     '''
-    To optimize assets loading for alpha images
-    "lru_cache" decorator saves recent images into memory for fast retrieval
+    Carica un'immagine con trasparenza (canale alpha) usando la cache.
     '''
     return pygame.image.load(path).convert_alpha()
 
+def scale_img(img, scale_factor=0.833333):
+    '''
+    Ridimensiona un'immagine secondo un fattore di scala.
+    Il fattore 0.833333 = 1280/1536 converte dalla risoluzione originale a 1280x720.
+    
+    Args:
+        img: Immagine PyGame da scalare
+        scale_factor: Fattore di scala (default 0.833333)
+    Returns:
+        Immagine scalata
+    '''
+    new_width = int(img.get_width() * scale_factor)
+    new_height = int(img.get_height() * scale_factor)
+    return pygame.transform.scale(img, (new_width, new_height))
+
+
+# ========== CLASSE PRINCIPALE PYGAME ==========
+
 class OrsoPyGame:
     '''
-    PyGame specific implementation for the game
-    '''
-    # Create the window
-    if IS_WEB: # WebASM
-        FINESTRA_X=1280
-        FINESTRA_Y=720
-    else:
-        FINESTRA_X=1536
-        FINESTRA_Y=864
+    Classe principale che gestisce l'interfaccia grafica con PyGame.
+    Coordina menu, manches, HUD e input dell'utente.
+    '''    
+    # Create the window - sempre 1280x720
+    FINESTRA_X = 1280
+    FINESTRA_Y = 720
     DIM_CASELLA = 80
 
     def __init__(self):
@@ -418,14 +571,14 @@ class OrsoPyGame:
         self.clock = pygame.time.Clock()
         self._load_assets_menu()
         self._load_assets_game()
-        # Gestione caselle: posizione e gruppo sprite
-        self._caselle = [(730,0), (565,5), (900,5), #0,1,2
-                    (730,135), (350,225), (730,225), #3,4,5
-                    (1115,225), (315,385), (465,385), #6,7,8
-                    (565,385), (730,385), (900,385), #9,10,11
-                    (995,385), (1155,385), (350,565), #12,13,14
-                    (730,565), (1115,565), (730,655), #15,16,17
-                    (565,775), (900,775), (730,800)] #18.19.20
+        # Gestione caselle: posizione e gruppo sprite - SCALATE
+        self._caselle = [(608,0), (471,4), (750,4), #0,1,2
+                    (608,112), (292,188), (608,188), #3,4,5
+                    (929,188), (262,321), (387,321), #6,7,8
+                    (471,321), (608,321), (750,321), #9,10,11
+                    (829,321), (962,321), (292,471), #12,13,14
+                    (608,471), (929,471), (608,546), #15,16,17
+                    (471,646), (750,646), (608,667)] #18.19.20
         # Creazione gruppo caselle
         self._lista_caselle = pygame.sprite.Group()
         for i,p in enumerate(self._caselle):
@@ -437,24 +590,24 @@ class OrsoPyGame:
 
     def _load_assets_game(self) -> None:
         '''Loading game assets'''
-        self.USCITA_IMG = get_img('img/back.png')
+        self.USCITA_IMG = scale_img(get_img('img/back.png'))
         self.USCITA_RECT = self.USCITA_IMG.get_rect()
-        self.LABEL = get_img('img/buttonLong.png')
-        self.USCITA_RECT.center = (1355,675)
+        self.LABEL = scale_img(get_img('img/buttonLong.png'))
+        self.USCITA_RECT.center = (1129,562)
         # Scacchiera
-        self.BOARD_IMG = get_img('img/board.png')
+        self.BOARD_IMG = scale_img(get_img('img/board.png'))
 
     def _load_assets_menu(self) -> None:
         '''Loading menu assets'''
         # grafica titolo creata con https://textcraft.net/
-        self.ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
-        self.TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
-        self.TITOLO = get_img_alpha("img/Gioco-dellorso.png")
-        self.L_ORSO = get_img_alpha("img/Lorso.png")
-        self.I_CACCIATORI = get_img_alpha("img/I-cacciatori.png")
+        self.ORSO_IDLE_IMG = scale_img(get_img('img/little-bear-idle.png'))
+        self.TRE_CACCIATORI_IMG = scale_img(get_img('img/TreCacciatoriTurno.png'))
+        self.TITOLO = scale_img(get_img_alpha("img/Gioco-dellorso.png"))
+        self.L_ORSO = scale_img(get_img_alpha("img/Lorso.png"))
+        self.I_CACCIATORI = scale_img(get_img_alpha("img/I-cacciatori.png"))
         # Utilizzo casuale delle immagini di sfondo
-        self.MENU_BACKGROUND = get_img(f"img/3d_board.png")
-        self.PBG_LOGO = get_img("img/pbg-small-empty.png")
+        self.MENU_BACKGROUND = scale_img(get_img(f"img/3d_board.png"))
+        self.PBG_LOGO = scale_img(get_img("img/pbg-small-empty.png"))
 
     async def menu(self) -> None:
         '''
@@ -464,14 +617,14 @@ class OrsoPyGame:
             pygame.mixer.music.load('sfx/intro.ogg')
             pygame.mixer.music.play(-1)
 
-        # Elementi di sfondo
+        # Elementi di sfondo - SCALATI
         self.screen.blit(self.MENU_BACKGROUND, (0, 0))
         self.screen.blit(self.PBG_LOGO, (0, 0))
-        self.screen.blit(self.TITOLO, (500,20))
-        self.screen.blit(self.L_ORSO, (230, 350))
-        self.screen.blit(self.ORSO_IDLE_IMG, (250, 420))
-        self.screen.blit(self.I_CACCIATORI, (1160, 350))
-        self.screen.blit(self.TRE_CACCIATORI_IMG, (1200, 420))
+        self.screen.blit(self.TITOLO, (417,17))
+        self.screen.blit(self.L_ORSO, (192, 292))
+        self.screen.blit(self.ORSO_IDLE_IMG, (208, 350))
+        self.screen.blit(self.I_CACCIATORI, (967, 292))
+        self.screen.blit(self.TRE_CACCIATORI_IMG, (1000, 350))
         
         # Creo gruppo sprite per menu
         self._menu_items = pygame.sprite.Group()
@@ -486,7 +639,7 @@ class OrsoPyGame:
             True:"Gioca contro il computer              ",
             False:'Gioca contro un amico                 '
         }
-        self._m_pl_mode = OpzioneMenuAgainstComputer(self.OPZIONI_PLAYER_MODE, True, self, (580,350)) #305
+        self._m_pl_mode = OpzioneMenuAgainstComputer(self.OPZIONI_PLAYER_MODE, True, self, (483,292))
         self._menu_items.add(self._m_pl_mode)
         
         # Opzione menu Mosse
@@ -494,7 +647,7 @@ class OrsoPyGame:
             True:'Prima manche come orso                  ',
             False:'Prima manche come cacciatore           '
         }
-        self._m_first_manche = OpzioneMenuFirstMancheAsBear(self.OPZIONI_PRIMA_MANCHE, False, self, (580,440))
+        self._m_first_manche = OpzioneMenuFirstMancheAsBear(self.OPZIONI_PRIMA_MANCHE, False, self, (483,367))
         self._menu_items.add(self._m_first_manche)
         
         # Opzione disposizione iniziale
@@ -502,7 +655,7 @@ class OrsoPyGame:
             True: 'Posizione iniziale classica        ',
             False:"Posizione iniziale centrale        "
             }
-        self._m_pos_iniziali = OpzioneMenuInizio(self.OPZIONI_INIZIO, True, self, (580,530)) 
+        self._m_pos_iniziali = OpzioneMenuInizio(self.OPZIONI_INIZIO, True, self, (483,442)) 
         self._menu_items.add(self._m_pos_iniziali)
 
         self._pos_call = (0, 0)
@@ -580,7 +733,7 @@ class OrsoPyGame:
             # Disegna la scacchiera
             self.screen.blit(self.BOARD_IMG, (0, 0))
             # Pannello uscita
-            self.screen.blit(self.USCITA_IMG, (1250, 580))
+            self.screen.blit(self.USCITA_IMG, (1042, 483))
             # Aggiorna le caselle
             self._lista_caselle.update()
             self._lista_caselle.draw(self.screen)
@@ -643,8 +796,8 @@ class OrsoPyGame:
                 if MUSIC:
                     pygame.mixer.music.pause()
                 self._msg = "Fine manche"
-                self.screen.blit(self.LABEL, (580, 380))
-                self.LOBSTER_25 = pygame.font.Font('LobsterTwo-Regular.otf',25)
+                self.screen.blit(self.LABEL, (483, 317))
+                self.LOBSTER_25 = pygame.font.Font('LobsterTwo-Regular.otf',21)
                 text = ""
                 if self.una_manche.is_bear_winner():
                     try:
@@ -662,7 +815,7 @@ class OrsoPyGame:
                     except:
                         pass
                     text = self.LOBSTER_25.render(f"  I cacciatori lasciano all'orso {self.una_manche.get_bear_moves()} mosse", 1, BLACK)
-                self.screen.blit(text, (590,400))
+                self.screen.blit(text, (492,333))
                 pygame.display.update()
                 await asyncio.sleep(5)                    
                 return self.una_manche.get_bear_moves()
@@ -695,10 +848,10 @@ class OrsoPyGame:
         # HUD situazione turni e punteggi
         self._hud = pygame.sprite.Group()
         self._h_msg = HudGioco(self.screen, "      Prima manche      ")
-        self._h_m_pA = HudTurnoMancheGiocatore(500,300,self.screen, self.player_A)
-        self._h_t_pA = HudMosseOrsoMancheGiocatore(500,500,self.screen, self.player_A)
-        self._h_m_pB = HudTurnoMancheGiocatore(850,300,self.screen, self.player_B)        
-        self._h_t_pB = HudMosseOrsoMancheGiocatore(850,500,self.screen, self.player_B)       
+        self._h_m_pA = HudTurnoMancheGiocatore(417,250,self.screen, self.player_A)
+        self._h_t_pA = HudMosseOrsoMancheGiocatore(417,417,self.screen, self.player_A)
+        self._h_m_pB = HudTurnoMancheGiocatore(708,250,self.screen, self.player_B)        
+        self._h_t_pB = HudMosseOrsoMancheGiocatore(708,417,self.screen, self.player_B)       
         self._hud.add(self._h_msg)
         self._hud.add(self._h_t_pA)
         self._hud.add(self._h_t_pB)
@@ -727,10 +880,10 @@ class OrsoPyGame:
         # HUD situazione turni e punteggi
         self._hud = pygame.sprite.Group()
         self._h_msg = HudGioco(self.screen, "    Seconda manche    ")
-        self._h_m_pA = HudTurnoMancheGiocatore(500,300,self.screen, self.player_A)
-        self._h_t_pA = HudMosseOrsoMancheGiocatore(500,500,self.screen, self.player_A)
-        self._h_m_pB = HudTurnoMancheGiocatore(850,300,self.screen, self.player_B)        
-        self._h_t_pB = HudMosseOrsoMancheGiocatore(850,500,self.screen, self.player_B)       
+        self._h_m_pA = HudTurnoMancheGiocatore(417,250,self.screen, self.player_A)
+        self._h_t_pA = HudMosseOrsoMancheGiocatore(417,417,self.screen, self.player_A)
+        self._h_m_pB = HudTurnoMancheGiocatore(708,250,self.screen, self.player_B)        
+        self._h_t_pB = HudMosseOrsoMancheGiocatore(708,417,self.screen, self.player_B)       
         self._hud.add(self._h_msg)
         self._hud.add(self._h_t_pA)
         self._hud.add(self._h_t_pB)
@@ -759,10 +912,10 @@ class OrsoPyGame:
         self.screen.blit(self.PBG_LOGO, (0, 0))
         self._hud = pygame.sprite.Group()
         self._h_msg = HudGioco(self.screen, "Fine seconda manche")
-        self._h_m_pA = HudTurnoMancheGiocatore(500,300,self.screen, self.player_A)
-        self._h_t_pA = HudMosseOrsoMancheGiocatore(500,500,self.screen, self.player_A)
-        self._h_m_pB = HudTurnoMancheGiocatore(850,300,self.screen, self.player_B)        
-        self._h_t_pB = HudMosseOrsoMancheGiocatore(850,500,self.screen, self.player_B)       
+        self._h_m_pA = HudTurnoMancheGiocatore(417,250,self.screen, self.player_A)
+        self._h_t_pA = HudMosseOrsoMancheGiocatore(417,417,self.screen, self.player_A)
+        self._h_m_pB = HudTurnoMancheGiocatore(708,250,self.screen, self.player_B)        
+        self._h_t_pB = HudMosseOrsoMancheGiocatore(708,417,self.screen, self.player_B)       
         self._hud.add(self._h_msg)
         self._hud.add(self._h_t_pA)
         self._hud.add(self._h_t_pB)
@@ -786,11 +939,11 @@ class OpzioneMenu(pygame.sprite.Sprite):
     - gioco orso
     - posizione del pannello di sfondo
     '''
-    PANNELLO_UNO_IMG = get_img('img/buttonLong.png') #panel
+    PANNELLO_UNO_IMG = scale_img(get_img('img/buttonLong.png')) #panel
     def __init__(self, opzioni: dict, default_value: object, game: OrsoPyGame, position: tuple):
         super().__init__()
         self.game = game
-        self.LOBSTER_30 = pygame.font.Font('LobsterTwo-Regular.otf',30)
+        self.LOBSTER_30 = pygame.font.Font('LobsterTwo-Regular.otf',25)
         # Iniziano i cacciatori è il default
         self.value = default_value
         self.opzioni = opzioni
@@ -805,7 +958,7 @@ class OpzioneMenu(pygame.sprite.Sprite):
         self.image = self._text
 
     def update(self):
-        self.game.screen.blit(OpzioneMenuNumeroMosse.PANNELLO_UNO_IMG, self.position)
+        self.game.screen.blit(OpzioneMenu.PANNELLO_UNO_IMG, self.position)
         self._text = self.LOBSTER_30.render(
             self.opzioni[self.value], 
             1, 
@@ -852,15 +1005,15 @@ class OpzioneMenuUscita(pygame.sprite.Sprite):
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.ESCI_GIOCO = get_img('img/buttonLong.png')
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
+        self.ESCI_GIOCO = scale_img(get_img('img/buttonLong.png'))
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
         self._esci_str = self.LOBSTER_45.render("Esci dal gioco", 1, BLACK)
         self.rect = self._esci_str.get_rect()
-        self.rect.x = 170
-        self.rect.y = 690
+        self.rect.x = 142
+        self.rect.y = 575
 
     def update(self):
-        self.game.screen.blit(self.ESCI_GIOCO, (100, 680))
+        self.game.screen.blit(self.ESCI_GIOCO, (83, 567))
         self.image = self._esci_str
 
     async def action(self):
@@ -873,16 +1026,16 @@ class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.INIZIA = get_img('img/buttonLong.png')
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
+        self.INIZIA = scale_img(get_img('img/buttonLong.png'))
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
         self._inizia_str = self.LOBSTER_45.render("  Inizia a giocare", 1, BLACK)
         self.rect = self._inizia_str.get_rect()
-        self.rect.x = 1140
-        self.rect.y = 690
+        self.rect.x = 950
+        self.rect.y = 575
 
 
     def update(self):
-        self.game.screen.blit(self.INIZIA, (1100, 680))
+        self.game.screen.blit(self.INIZIA, (917, 567))
         self.image = self._inizia_str
 
     async def action(self):
@@ -902,53 +1055,53 @@ class OpzioneMenuInizioGioco(pygame.sprite.Sprite):
 # Classi HUD di gioco
 class HudTurno(pygame.sprite.Sprite):
     '''HUD: pannello per il turno'''
-    ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
-    TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
+    ORSO_IDLE_IMG = scale_img(get_img('img/little-bear-idle.png'))
+    TRE_CACCIATORI_IMG = scale_img(get_img('img/TreCacciatoriTurno.png'))
     
-    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
+    PANNELLO_DUE_IMG = scale_img(get_img('img/panel.png')) #panel_due
  
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
         self._turno_str = self.LOBSTER_45.render("Turno", 1, BLACK)
 
     def update(self): 
         # Inizializzazione Pannello turno, parte fissa
-        self.game.screen.blit(HudTurno.PANNELLO_DUE_IMG, (1250, 80))        
-        self.game.screen.blit(self._turno_str, (1300, 90))          
+        self.game.screen.blit(HudTurno.PANNELLO_DUE_IMG, (1042, 67))        
+        self.game.screen.blit(self._turno_str, (1083, 75))          
         if self.game.una_manche._is_hunter_turn:
             self.rect = HudTurno.TRE_CACCIATORI_IMG.get_rect()
-            self.rect.x = 1265
-            self.rect.y = 160
+            self.rect.x = 1054
+            self.rect.y = 133
             self.image = HudTurno.TRE_CACCIATORI_IMG
         else:
             self.rect = HudTurno.ORSO_IDLE_IMG.get_rect()
-            self.rect.x = 1320
-            self.rect.y = 160
+            self.rect.x = 1100
+            self.rect.y = 133
             self.image = HudTurno.ORSO_IDLE_IMG
 
 
 
 class HudMosseOrso(pygame.sprite.Sprite):
     '''HUD: pannello per il contatore mosse orso'''
-    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
+    PANNELLO_DUE_IMG = scale_img(get_img('img/panel.png')) #panel_due
 
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
-        self.LOBSTER_90 = pygame.font.Font('LobsterTwo-Regular.otf',90)
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
+        self.LOBSTER_90 = pygame.font.Font('LobsterTwo-Regular.otf',75)
         # Pannello mosse orso
         self._mosse_str = self.LOBSTER_45.render("Mosse orso", 1, BLACK)     
             
     def update(self):
         self._mosse = self.LOBSTER_90.render(str(self.game.una_manche.get_bear_moves()), 1, BLACK)       
-        self.game.screen.blit(HudMosseOrso.PANNELLO_DUE_IMG, (80, 80))  
-        self.game.screen.blit(self._mosse_str, (90, 90))  
+        self.game.screen.blit(HudMosseOrso.PANNELLO_DUE_IMG, (67, 67))  
+        self.game.screen.blit(self._mosse_str, (75, 75))  
         self.rect = self._mosse.get_rect()
-        self.rect.x = 145
-        self.rect.y = 140
+        self.rect.x = 121
+        self.rect.y = 117
         self.image = self._mosse
 
 
@@ -956,10 +1109,10 @@ class HudMosseOrso(pygame.sprite.Sprite):
 #########################################
 class HudTurnoMancheGiocatore(pygame.sprite.Sprite):
     '''HUD: pannello per il turno del giocatore'''
-    ORSO_IMG = get_img('img/little-bear-sel.png')
-    TRE_CACCIATORI_IMG = get_img('img/TreCacciatoriTurno.png')
+    ORSO_IMG = scale_img(get_img('img/little-bear-sel.png'))
+    TRE_CACCIATORI_IMG = scale_img(get_img('img/TreCacciatoriTurno.png'))
     
-    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
+    PANNELLO_DUE_IMG = scale_img(get_img('img/panel.png')) #panel_due
  
     def __init__(self, x, y, screen, giocatore: GamePlayer):
         super().__init__()
@@ -967,7 +1120,7 @@ class HudTurnoMancheGiocatore(pygame.sprite.Sprite):
         self.y = y
         self.screen = screen
         self.giocatore = giocatore
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
 
         self._turno_str = self.LOBSTER_45.render(f"{self.giocatore.name}", 1, BLACK)
 
@@ -988,7 +1141,7 @@ class HudTurnoMancheGiocatore(pygame.sprite.Sprite):
 
 class HudMosseOrsoMancheGiocatore(pygame.sprite.Sprite):
     '''HUD: pannello per il numero mosse orso del giocatore'''
-    PANNELLO_DUE_IMG = get_img('img/panel.png') #panel_due
+    PANNELLO_DUE_IMG = scale_img(get_img('img/panel.png')) #panel_due
 
     def __init__(self, x, y, screen, giocatore: GamePlayer):
         super().__init__()
@@ -996,8 +1149,8 @@ class HudMosseOrsoMancheGiocatore(pygame.sprite.Sprite):
         self.y = y
         self.screen = screen
         self.giocatore = giocatore        
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
-        self.LOBSTER_90 = pygame.font.Font('LobsterTwo-Regular.otf',90)
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
+        self.LOBSTER_90 = pygame.font.Font('LobsterTwo-Regular.otf',75)
         # Pannello mosse orso
         self._mosse_str = self.LOBSTER_45.render("Mosse orso", 1, BLACK)     
             
@@ -1019,38 +1172,38 @@ class HudMosseOrsoMancheGiocatore(pygame.sprite.Sprite):
 
 class HudGioco(pygame.sprite.Sprite):
     '''HUD: pannello per i messaggi'''    
-    PANNELLO_UNO_IMG = get_img('img/buttonLong.png') #panel
+    PANNELLO_UNO_IMG = scale_img(get_img('img/buttonLong.png')) #panel
 
     def __init__(self, screen, msg):
         super().__init__()
         self.screen = screen
         self.msg = msg
-        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',45)
+        self.LOBSTER_45 = pygame.font.Font('LobsterTwo-Regular.otf',37)
 
     def update(self):
         self._text = self.LOBSTER_45.render(self.msg, 1, BLACK)
-        self.screen.blit(HudGioco.PANNELLO_UNO_IMG, (580,150))
+        self.screen.blit(HudGioco.PANNELLO_UNO_IMG, (483,125))
         self.rect = self._text.get_rect()
-        self.rect.x = 590
-        self.rect.y = 160
+        self.rect.x = 492
+        self.rect.y = 133
         self.image = self._text
 
 #########################################
 class HudMessaggi(pygame.sprite.Sprite):
     '''HUD: pannello per i messaggi'''    
-    PANNELLO_UNO_IMG = get_img('img/buttonLong.png') #panel
+    PANNELLO_UNO_IMG = scale_img(get_img('img/buttonLong.png')) #panel
 
     def __init__(self, game: OrsoPyGame):
         super().__init__()
         self.game = game
-        self.LOBSTER_30 = pygame.font.Font('LobsterTwo-Regular.otf',30)
+        self.LOBSTER_30 = pygame.font.Font('LobsterTwo-Regular.otf',25)
 
     def update(self):
         self._text = self.LOBSTER_30.render(self.game._msg, 1, BLACK)
-        self.game.screen.blit(self.PANNELLO_UNO_IMG, (40, 680))
+        self.game.screen.blit(self.PANNELLO_UNO_IMG, (33, 567))
         self.rect = self._text.get_rect()
-        self.rect.x = 50
-        self.rect.y = 705
+        self.rect.x = 42
+        self.rect.y = 587
         self.image = self._text
 
 
@@ -1062,25 +1215,25 @@ class CasellaGiocoOrso(pygame.sprite.Sprite):
     # Static resources
     TRASPARENTE = pygame.Surface((80,80), pygame.SRCALPHA)
 
-    ORSO_IMG = get_img('img/little-bear.png')
-    ORSO_IDLE_IMG = get_img('img/little-bear-idle.png')
-    ORSO_SEL_IMG = get_img('img/little-bear-sel.png')
+    ORSO_IMG = scale_img(get_img('img/little-bear.png'))
+    ORSO_IDLE_IMG = scale_img(get_img('img/little-bear-idle.png'))
+    ORSO_SEL_IMG = scale_img(get_img('img/little-bear-sel.png'))
 
-    CACCIATORE_UNO_IMG = get_img('img/little-hunter1.png')
-    CACCIATORE_UNO_IDLE_IMG = get_img('img/little-hunter1-idle.png')
-    CACCIATORE_UNO_SEL_IMG = get_img('img/little-hunter1-sel.png')
+    CACCIATORE_UNO_IMG = scale_img(get_img('img/little-hunter1.png'))
+    CACCIATORE_UNO_IDLE_IMG = scale_img(get_img('img/little-hunter1-idle.png'))
+    CACCIATORE_UNO_SEL_IMG = scale_img(get_img('img/little-hunter1-sel.png'))
 
-    CACCIATORE_DUE_IMG = get_img('img/little-hunter2.png')
-    CACCIATORE_DUE_IDLE_IMG = get_img('img/little-hunter2-idle.png')
-    CACCIATORE_DUE_SEL_IMG = get_img('img/little-hunter2-sel.png')
+    CACCIATORE_DUE_IMG = scale_img(get_img('img/little-hunter2.png'))
+    CACCIATORE_DUE_IDLE_IMG = scale_img(get_img('img/little-hunter2-idle.png'))
+    CACCIATORE_DUE_SEL_IMG = scale_img(get_img('img/little-hunter2-sel.png'))
 
-    CACCIATORE_TRE_IMG = get_img('img/little-hunter3.png')
-    CACCIATORE_TRE_IDLE_IMG = get_img('img/little-hunter3-idle.png')
-    CACCIATORE_TRE_SEL_IMG = get_img('img/little-hunter3-sel.png')
+    CACCIATORE_TRE_IMG = scale_img(get_img('img/little-hunter3.png'))
+    CACCIATORE_TRE_IDLE_IMG = scale_img(get_img('img/little-hunter3-idle.png'))
+    CACCIATORE_TRE_SEL_IMG = scale_img(get_img('img/little-hunter3-sel.png'))
         
     # Orme
-    ORMA_ORSO_IMG = get_img('img/impronta_orso.png')
-    ORMA_CACCIATORE_IMG = get_img('img/impronta_cacciatore.png')
+    ORMA_ORSO_IMG = scale_img(get_img('img/impronta_orso.png'))
+    ORMA_CACCIATORE_IMG = scale_img(get_img('img/impronta_cacciatore.png'))
 
     def __init__(self, position: int, game: OrsoPyGame):
         super().__init__()
